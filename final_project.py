@@ -5,6 +5,7 @@ import requests_cache
 import networkx as nx 
 import matplotlib.pyplot as plt
 import pprint
+from prettytable import PrettyTable
 
 pp = pprint.PrettyPrinter(indent=2)
 
@@ -64,6 +65,18 @@ def save_cache(cache_dict):
 
 
 class Drugs():
+    ''' The Drugs class
+
+     Attributes:
+    ------------
+    rxcui: RxCUI is a unique, unambiguous identifier that is assigned to an individual drug entity in RxNorm and used to
+      relate to all things associated with that drug.
+    name: RxNorm concept name
+    synonym: Short or "Tallman" RxNorm synonym
+    tty: indicate generic and branded drug names at different levels of specificity
+    json: the json file of the drug called
+
+       '''
     def __init__(self, rxcui=None, name=None, synonym=None, tty=None, json=None):
         self.json = json
         if json is None:
@@ -85,111 +98,117 @@ class Drugs():
 
 
 
-
+# Meds = []
 while True:
     Meds = []
-    user_input = input("Enter a medication for drug interaction identification: \n")
-    if user_input.isalpha():
-        test = 'https://rxnav.nlm.nih.gov/REST/drugs.json?name='
-        search = user_input
-        # search = 'warfarin'
-        test_url = test+search
-        response = requests.get(test_url).json()
-        data = response['drugGroup']['conceptGroup']
-        write_json('warfarin_RXNorm.json', data)
+    continue_adding = True
+    while continue_adding:
+        #request user drug name input for RXCUI drug indentification. 
+        user_input = input("Enter a medication for drug interaction identification or quit: \n")
+        if user_input == 'quit'.lower():
+                print('Thank you, have a nice day.')
+                break
+        else:
+            if user_input.isalpha():
+                test = 'https://rxnav.nlm.nih.gov/REST/drugs.json?name='
+                search = user_input
+                # search = 'warfarin'
+                test_url = test+search
+                response = requests.get(test_url).json()
+                # print(response.content)
+                data = response['drugGroup']['conceptGroup']
+                # write_json('warfarin_RXNorm.json', data)
 
-        for dicts in data:
-            if len(dicts.keys()) > 1:
-                for info in dicts['conceptProperties']:
-                    Meds.append(Drugs(json=info))   
-        
-        cache_me = []
-        for a in Meds:
-            cache_me.append((a.__dict__))
-        save_cache(cache_me)
-        
-        cache = open_cache
-        for med in Meds:
-            if cache:
-                print(med.drug_rxcui())
-        
-        new_input = input("Please enter another medication for drug interaction identification with first entry. \n")
-        if new_input.isalpha():
-            user_input = new_input
-        while True:
-            yes_no_input = input("Do you still want to add other medications for drug interaction testing? \n")
-            if yes_no_input.lower() == "yes":
-                new_input_two = input("Please add medication. \n")
-                if new_input_two.isalpha():
-                    user_input = new_input_two
-                # else: 
-                #     continue
+                #loop through data returned from API call
+                for dicts in data:
+                    if len(dicts.keys()) > 1:
+                        for info in dicts['conceptProperties']:
+                            drug = Drugs(json=info)
+                            if drug not in Meds:
+                                Meds.append(drug)   
+            
+            cache_me = []
+            for a in Meds:
+                cache_me.append((a.__dict__))
+            save_cache(cache_me)
+            
+            cache = open_cache
+            for med in Meds:
+                if cache:
+                    print(med.drug_rxcui())
+    # print(Meds)    
+    
+    # rxcuis identified in the previous API calls will be entered for drug interaction identification    
+    rxcuis_input = input("Please enter the rxcui drug codes for drug interaction identification (separated by space): \n")
+    rxcuis = rxcuis_input.strip().split()
+    #print(rxcuis)
+    rxcuis_str = "+".join(rxcuis)
+    #print(rxcuis_str)
+    if rxcuis_str:
+    # print(rxcuis_str)
+        api_url = ' https://rxnav.nlm.nih.gov/REST/interaction/list.json?rxcuis='
+        search = rxcuis_str
+        interaction_url = api_url+search
+        # print(interaction_url)
+        response = requests.get(interaction_url).json()
+        data = response['fullInteractionTypeGroup']
+        # print(data)
+        # print(response.content)
+        # write_json('triple_interaction.json', data)
 
-#new_input = input("Please enter another medication to test the drug interaction with: \n") 
-    # while True:
-    #     rxcui_input = input("Please enter the rxcui drug code for drug indentification: \n")
-    #     if rxcui_input.isnumeric():
-    #         print(rxcui_input)
-    #         api_url = 'https://rxnav.nlm.nih.gov/REST/interaction/interaction.json?rxcui='
-    #         search = rxcui_input
-    #         interaction_url = api_url+search
-    #         response = requests.get(interaction_url).json()
-    #         data = response
-    #         print(data)
-                
+    vertex_list = []
+    for group_interaction in data:
+        for interaction in group_interaction["fullInteractionType"]:
+            # print(interaction)
+            # print(interaction['interactionPair'])
+            for interaction_pair in interaction['interactionPair']:
+                # print(interaction_pair)
+                drug1 = interaction_pair['interactionConcept'][0]['minConceptItem']['name']
+                drug2 = interaction_pair['interactionConcept'][1]['minConceptItem']['name']
+                severity = interaction_pair['severity']
+                description = interaction_pair['description']
+                vertex_list.append([drug1, drug2, severity, description])
+    # print(vertex_list)
 
-requests_cache.install_cache('api_cache')
-response = requests.get('https://rxnav.nlm.nih.gov/REST/interaction/list.json?rxcuis=207106+152923+656659')
-data = response.json()["fullInteractionTypeGroup"]
-# print(data)
+    #create a drug interaction table                     
+    table = PrettyTable()
+    table.field_names = ["Drug 1", "Drug 2", "Severity", "Description"]
 
+    #add data to the table
+    for vertex in vertex_list:
+        table.add_row(vertex)
+    print(table)
 
-vertex_list = []
-for group_interaction in data:
-    for interaction in group_interaction["fullInteractionType"]:
-        # print(interaction)
-        # print(interaction['interactionPair'])
-        for interaction_pair in interaction['interactionPair']:
-            # print(interaction_pair)
-            drug1 = interaction_pair['interactionConcept'][0]['minConceptItem']['name']
-            drug2 = interaction_pair['interactionConcept'][1]['minConceptItem']['name']
-            severity = interaction_pair['severity']
-            description = interaction_pair['description']
-            vertex_list.append([drug1, drug2, severity, description])
-print(vertex_list)
+    #create an empty network graph
+    G = nx.Graph()
+    for edge in vertex_list:
+        drug1 = edge[0]
+        drug2 = edge[1]
+        severity = edge[2]
+        description = edge[3]
+        G.add_edge(drug1, drug2, severity=severity, description=description)
 
+    # Set the node size based on the severity of each drug
+    for node in G.nodes:
+        severity = None
+        for _, _, data in G.edges(node, data=True):
+            if 'severity' in data:
+                severity = data['severity']
+                break
+        if severity == 'high':
+            G.nodes[node]['node_size'] = 800
+        elif severity == 'moderate':
+            G.nodes[node]['node_size'] = 500
+        elif severity == 'low':
+            G.nodes[node]['node_size'] = 300
+        else:
+            G.nodes[node]['node_size'] = 100
 
-
-
-G = nx.Graph()
-for edge in vertex_list:
-    drug1 = edge[0]
-    drug2 = edge[1]
-    severity = edge[2]
-    description = edge[3]
-    G.add_edge(drug1, drug2, severity=severity, description=description)
-
-# Set the node size based on the severity of each drug
-for node in G.nodes:
-    severity = None
-    for _, _, data in G.edges(node, data=True):
-        if 'severity' in data:
-            severity = data['severity']
-            break
-    if severity == 'high':
-        G.nodes[node]['node_size'] = 800
-    elif severity == 'moderate':
-        G.nodes[node]['node_size'] = 500
-    elif severity == 'low':
-        G.nodes[node]['node_size'] = 300
-    else:
-        G.nodes[node]['node_size'] = 100
-
-# Draw the graph
-pos = nx.spring_layout(G)
-node_sizes = [data['node_size'] for _, data in G.nodes(data=True)]
-nx.draw_networkx_nodes(G, pos, node_size=node_sizes)
-nx.draw_networkx_edges(G, pos)
-nx.draw_networkx_labels(G, pos)
-plt.axis('off')
-plt.show()   
+    # Draw the graph
+    pos = nx.spring_layout(G)
+    node_sizes = [data['node_size'] for _, data in G.nodes(data=True)]
+    nx.draw_networkx_nodes(G, pos, node_size=node_sizes)
+    nx.draw_networkx_edges(G, pos)
+    nx.draw_networkx_labels(G, pos)
+    plt.axis('off')
+    plt.show()         
