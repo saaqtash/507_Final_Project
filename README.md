@@ -13,7 +13,7 @@ The part uses command line prompts asking the users to submit drug names to iden
 2- A list of medications with similar names is produced. <br>
 3- User will identify the RXCUI for the drug needed. <br>
 4- The program will continue to prompt the user to enter drug names till the user enters quit. <br>
-5- Next the user will be prompted to enter the RXCUIs into the next API. <br>
+5- Next the user will be prompted to enter the RXCUIs into the drug interaction API. <br>
 6- Drug interaction will be identified based on the RXCUIs entered. <br>
 7- The interactions will be displayed as a network and a table will provide a summary of the interaction descriptions. <br>
 
